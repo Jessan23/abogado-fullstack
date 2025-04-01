@@ -23,11 +23,15 @@ class Cliente(db.Model):
     nombre = db.Column(db.String(100), nullable=False)
     correo = db.Column(db.String(100), unique=True, nullable=False)
     telefono = db.Column(db.String(20), nullable=True)
+    user_id = db.Column(db.Integer, db.ForeignKey(User.id), nullable=False)
+    
+    user= db.relationship("User", backref="Clientes") 
 
     def serialize(self):
         return {
             "id": self.id,
             "nombre": self.nombre,
             "correo": self.correo,
-            "telefono": self.telefono
+            "telefono": self.telefono,
+            "user_id": self.user_id
         }

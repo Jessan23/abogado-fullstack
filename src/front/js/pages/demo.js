@@ -7,7 +7,6 @@ export const Demo = () => {
 
     // Estado local para el formulario
     const [formData, setFormData] = useState({
-        nombre: '',
         email: '',
         password: ''
     });
@@ -57,7 +56,7 @@ export const Demo = () => {
                     />
                 </div>
                 <div className="form-group">
-                    <label htmlFor="correo">Correo</label>
+                    <label htmlFor="email">Email</label>
                     <input
                         type="email"
                         className="form-control"

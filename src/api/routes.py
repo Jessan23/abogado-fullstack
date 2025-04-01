@@ -1,29 +1,75 @@
-"""
-This module takes care of starting the API Server, Loading the DB and Adding the endpoints
-"""
-from flask import Flask, request, jsonify, url_for, Blueprint
-from api.models import db, User, Cliente
-from api.utils import generate_sitemap, APIException
-from flask_cors import CORS
-
-api = Blueprint('api', __name__)
-
-# Allow CORS requests to this API
-CORS(api)
-
+import jwt
+import datetime
 from flask import Flask, request, jsonify, Blueprint
-from api.models import db, User
-from api.utils import APIException
 from flask_cors import CORS
+from werkzeug.security import check_password_hash
+from api.models import db, User, Cliente
+from api.utils import APIException
+
+SECRET_KEY = "tu_secreto_super_seguro"
 
 api = Blueprint('api', __name__)
 
 # Permitir solicitudes CORS
 CORS(api)
 
+# Ruta para Login
+@api.route('/login', methods=['POST'])
+def login():
+    try:
+        data = request.get_json()
+
+        # Verificar que los datos estén presentes
+        if not data or not data.get("email") or not data.get("password"):
+            return jsonify({"message": "Email y contraseña son requeridos"}), 400
+
+        # Buscar el usuario en la base de datos
+        user = User.query.filter_by(email=data["email"]).first()
+
+        if not user or not check_password_hash(user.password, data["password"]):
+            return jsonify({"message": "Credenciales inválidas"}), 401
+
+        # Generar el Token JWT
+        token = jwt.encode(
+            {"user_id": user.id, "exp": datetime.datetime.utcnow() + datetime.timedelta(days=1)},
+            SECRET_KEY,
+            algorithm="HS256"
+        )
+
+        return jsonify({"message": "Login exitoso", "token": token}), 200
+
+    except Exception as e:
+        return jsonify({"message": "Error al hacer login", "error": str(e)}), 500
+
+# Decorador para verificar el token
+def token_required(f):
+    from functools import wraps
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        token = request.headers.get('Authorization')
+
+        if not token:
+            return jsonify({"message": "Token es requerido"}), 401
+
+        try:
+            token = token.split(" ")[1]  # Extract the "Bearer" part
+            data = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+            current_user = User.query.get(data["user_id"])
+            if not current_user:
+                return jsonify({"message": "Usuario no encontrado"}), 401
+        except jwt.ExpiredSignatureError:
+            return jsonify({"message": "Token expirado"}), 401
+        except jwt.InvalidTokenError:
+            return jsonify({"message": "Token inválido"}), 401
+
+        return f(current_user, *args, **kwargs)
+
+    return decorated
+
 # Obtener todos los usuarios
 @api.route('/users', methods=['GET'])
-def get_users():
+@token_required
+def get_users(current_user):
     try:
         users = User.query.all()
         users_data = [user.serialize() for user in users]
@@ -31,10 +77,10 @@ def get_users():
     except Exception as e:
         return jsonify({"message": "Error al obtener los usuarios", "error": str(e)}), 501
 
-
 # Crear un nuevo usuario
 @api.route('/users', methods=['POST'])
-def create_user():
+@token_required
+def create_user(current_user):
     try:
         data = request.get_json()
 
@@ -45,7 +91,7 @@ def create_user():
         # Crear el nuevo usuario
         new_user = User(
             email=data["email"],
-            password=data["password"],  # *¡IMPORTANTE! Aquí deberías encriptar la contraseña antes de guardarla*
+            password=data["password"],  # ¡IMPORTANTE! Aquí deberías encriptar la contraseña antes de guardarla
             is_active=data.get("is_active", True)  # Si no se envía, se asume activo por defecto
         )
 
@@ -56,50 +102,10 @@ def create_user():
     except Exception as e:
         return jsonify({"message": "Error al crear el usuario", "error": str(e)}), 501
 
-# Actualizar un usuario
-@api.route('/users/<int:id>', methods=['PUT'])
-def update_user(id):
-    try:
-        user = User.query.get(id)
-        if user is None:
-            return jsonify({"message": "Usuario no encontrado"}), 404
-
-        data = request.get_json()
-
-        # Actualizar los campos proporcionados
-        if "email" in data:
-            user.email = data["email"]
-        if "password" in data:
-            user.password = data["password"]  # *¡IMPORTANTE! Deberías encriptar la nueva contraseña*
-        if "is_active" in data:
-            user.is_active = data["is_active"]
-
-        db.session.commit()
-
-        return jsonify({"message": "Usuario actualizado exitosamente", "user": user.serialize()}), 200
-    except Exception as e:
-        return jsonify({"message": "Error al actualizar el usuario", "error": str(e)}), 501
-
-# Eliminar un usuario
-@api.route('/users/<int:id>', methods=['DELETE'])
-def delete_user(id):
-    try:
-        user = User.query.get(id)
-        if user is None:
-            return jsonify({"message": "Usuario no encontrado"}), 404
-
-        db.session.delete(user)
-        db.session.commit()
-
-        return jsonify({"message": "Usuario eliminado exitosamente"}), 200
-    except Exception as e:
-        return jsonify({"message": "Error al eliminar el usuario", "error": str(e)}), 501
-
-
-
-
+# Ruta para obtener todos los clientes (Leer)
 @api.route('/clientes', methods=['GET'])
-def get_clientes():
+@token_required
+def get_clientes(current_user):
     try:
         clientes = Cliente.query.all()
         # Serializando la respuesta
@@ -110,7 +116,8 @@ def get_clientes():
 
 # Ruta para agregar un cliente (Crear)
 @api.route('/clientes', methods=['POST'])
-def add_cliente():
+@token_required
+def add_cliente(current_user):
     try:
         data = request.get_json()
 
@@ -136,7 +143,8 @@ def add_cliente():
 
 # Ruta para obtener un cliente por su ID (Leer)
 @api.route('/clientes/<int:id>', methods=['GET'])
-def get_cliente(id):
+@token_required
+def get_cliente(current_user, id):
     try:
         cliente = Cliente.query.get(id)
         if cliente is None:
@@ -147,7 +155,8 @@ def get_cliente(id):
 
 # Ruta para actualizar un cliente (Actualizar)
 @api.route('/clientes/<int:id>', methods=['PUT'])
-def update_cliente(id):
+@token_required
+def update_cliente(current_user, id):
     try:
         cliente = Cliente.query.get(id)
         if cliente is None:
@@ -172,7 +181,8 @@ def update_cliente(id):
 
 # Ruta para eliminar un cliente (Eliminar)
 @api.route('/clientes/<int:id>', methods=['DELETE'])
-def delete_cliente(id):
+@token_required
+def delete_cliente(current_user, id):
     try:
         cliente = Cliente.query.get(id)
         if cliente is None:

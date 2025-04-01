@@ -3,12 +3,13 @@ const getState = ({ getStore, getActions, setStore }) => {
         store: {
             user: null,
             clientes: [],
+            token: null, // Añadimos el token al estado
         },
         actions: {
             // Acción para obtener información del usuario
             getUser: async () => {
                 try {
-                    const resp = await fetch(process.env.BACKEND_URL + "/api/user");
+                    const resp = await fetch(process.env.BACKEND_URL + "/user");
                     const data = await resp.json();
                     setStore({ user: data }); // Actualiza el estado del usuario
                 } catch (error) {
@@ -40,41 +41,80 @@ const getState = ({ getStore, getActions, setStore }) => {
                     console.log("Error updating cliente:", error);
                 }
             },
+            // Acción para registrar un usuario
             registerUser: async (formData) => {
-				try {
-					// Verificar que formData solo tenga los campos correctos
-					const { email, password } = formData; // Solo desestructuramos correo y password
-			
-					console.log("Datos enviados para el registro:", { email, password }); // Verifica los datos
-			
-					const response = await fetch(process.env.BACKEND_URL + "/users", {
-						method: "POST",
-						headers: {
-							"Content-Type": "application/json"
-						},
-						body: JSON.stringify({ email, password }) // Solo enviamos correo y password
-					});
-			
-					const data = await response.json();
-			
-					if (response.ok) {
-						// Almacenar la información del usuario en el store
-						setStore({
-							user: data.user
-						});
-			
-						return { status: 201 }; // Usuario registrado correctamente
-					} else {
-						// Si el servidor responde con un error, muestra el error en consola
-						console.log("Error al registrar usuario:", data);
-						return { status: response.status }; // Retorna el status del error
-					}
-				} catch (error) {
-					console.error("Error al registrar usuario", error);
-					return { status: 500 }; // Error del servidor
-				}
-			}
-			
+                try {
+                    // Verificar que formData solo tenga los campos correctos
+                    const { email, password } = formData; // Solo desestructuramos correo y password
+
+                    console.log("Datos enviados para el registro:", { email, password }); // Verifica los datos
+
+                    const response = await fetch(process.env.BACKEND_URL + "/users", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({ email, password }) // Solo enviamos correo y password
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        // Almacenar la información del usuario en el store
+                        setStore({
+                            user: data.user
+                        });
+
+                        return { status: 201 }; // Usuario registrado correctamente
+                    } else {
+                        // Si el servidor responde con un error, muestra el error en consola
+                        console.log("Error al registrar usuario:", data);
+                        return { status: response.status }; // Retorna el status del error
+                    }
+                } catch (error) {
+                    console.error("Error al registrar usuario", error);
+                    return { status: 500 }; // Error del servidor
+                }
+            },
+
+            // Acción para iniciar sesión (login)
+            loginUser: async (formData) => {
+                try {
+                    const { email, password } = formData;
+
+                    console.log("Datos enviados para el login:", { email, password });
+
+                    const response = await fetch(process.env.BACKEND_URL + "/login", {
+                        method: "POST",
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+                        body: JSON.stringify({ email, password }) // Solo enviamos correo y password
+                    });
+
+                    const data = await response.json();
+
+                    if (response.ok) {
+                        // Si el login es exitoso, almacenamos el token y el usuario
+                        setStore({
+                            user: data.user,
+                            token: data.token // Guardamos el token en el store
+                        });
+
+                        // Opcional: Guardar el token en localStorage para futuras peticiones
+                        localStorage.setItem("token", data.token);
+
+                        return { status: 200 }; // Login exitoso
+                    } else {
+                        // Si el servidor responde con un error, muestra el error en consola
+                        console.log("Error al hacer login:", data);
+                        return { status: response.status }; // Retorna el status del error
+                    }
+                } catch (error) {
+                    console.error("Error al hacer login", error);
+                    return { status: 500 }; // Error del servidor
+                }
+            },
         }
     };
 };

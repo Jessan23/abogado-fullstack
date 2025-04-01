@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useContext } from "react";
+import React, { useState, useContext } from "react";
 import { Context } from "../store/appContext";
 
 const Home = () => {
@@ -14,7 +14,17 @@ const Home = () => {
 
     const handleSubmit = async (event) => {
         event.preventDefault();
-        await actions.createUser(formData);
+        // Llamar a la acción de login
+        const response = await actions.loginUser(formData);
+        // Si el login es exitoso, redirigir o hacer algo con el token
+        if (response.status === 200) {
+            localStorage.setItem("token", store.token); // Guardar el token
+            // Redirigir o actualizar el estado si es necesario
+            // Aquí podrías redirigir a otro componente o actualizar la UI
+            alert("Login exitoso");
+        } else {
+            alert("Error en el login");
+        }
     };
 
     return (
